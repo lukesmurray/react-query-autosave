@@ -1,9 +1,8 @@
 import { debounce } from "lodash";
 import { useCallback, useEffect, useMemo } from "react";
 import { QueryKey, useMutation, useQuery, useQueryClient } from "react-query";
-import { getUserData, saveUserData } from "../api/api";
 
-interface useAutoQueryOptions<D> {
+interface useAutoSyncQueryOptions<D> {
   /**
    * the query key for the query
    */
@@ -11,15 +10,15 @@ interface useAutoQueryOptions<D> {
   /**
    * debounced delay between saves, passed to lodash debounce wait parameter
    */
-  debounce_save_delay: number;
+  debounce_save_delay?: number;
   /**
    * max save between debounced saves
    */
-  max_save_delay: number;
+  max_save_delay?: number;
   /**
    * refetch interval for loading the query when the user doesn't have local changes
    */
-  auto_load_interval: number;
+  auto_load_interval?: number;
   /**
    * the current draft
    */
@@ -33,65 +32,75 @@ interface useAutoQueryOptions<D> {
    * It should not update when the draft changes.
    */
   getDraft: () => D | undefined;
+
+  /**
+   * function called to load the data from the server
+   */
+  queryFn: () => Promise<D | undefined>;
+
+  /**
+   * function called to save the data to the server
+   */
+  mutateFn: (data: D) => Promise<unknown>;
 }
 
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export const useAutoLoadQuery = <D>(options: useAutoQueryOptions<D>) => {
+/**
+ * Create a react query which allows the user to auto load and auto save data
+ * from the server
+ * @param options
+ * @returns
+ */
+export const useAutoSyncQuery = <D>(options: useAutoSyncQueryOptions<D>) => {
   const {
     queryKey,
-    auto_load_interval,
-    debounce_save_delay,
-    max_save_delay,
+    auto_load_interval = 1000,
+    debounce_save_delay = 500,
+    max_save_delay = Infinity,
     draft,
     setDraft,
     getDraft,
+    queryFn,
+    mutateFn,
   } = options;
 
   const queryClient = useQueryClient();
 
   // request current value from the server
-  const queryInfo = useQuery(
-    queryKey,
-    useCallback(() => getUserData(), []),
-    {
-      enabled: draft === undefined,
-      staleTime: Infinity,
-      refetchInterval: auto_load_interval,
-    }
-  );
+  const queryInfo = useQuery(queryKey, queryFn, {
+    enabled: draft === undefined,
+    staleTime: Infinity,
+    refetchInterval: auto_load_interval,
+  });
 
   // mutation for updating the server value
-  const mutation = useMutation(
-    useCallback((data: D) => saveUserData(data), []),
-    {
-      onMutate: async (data) => {
-        // cancel outgoing refetches
-        await queryClient.cancelQueries(queryKey);
+  const mutation = useMutation(mutateFn, {
+    onMutate: async (data) => {
+      // cancel outgoing refetches
+      await queryClient.cancelQueries(queryKey);
 
-        // snapshot the previous value
-        const previousData = queryClient.getQueryData(queryKey);
+      // snapshot the previous value
+      const previousData = queryClient.getQueryData(queryKey);
 
-        // optimistically set the new value
-        queryClient.setQueryData(queryKey, data);
-        // clear the draft
-        setDraft(undefined);
+      // optimistically set the new value
+      queryClient.setQueryData(queryKey, data);
+      // clear the draft
+      setDraft(undefined);
 
-        return { previousData };
-      },
-      onError: (err, data, context) => {
-        // reset the server state to the last known state
-        queryClient.setQueryData(queryKey, (context as any).previousData);
-        // reset the draft to the last known draft unless the user made more changes
-        if (draft !== undefined) {
-          setDraft(data);
-        }
-      },
-      // Always refetch after error or success:
-      onSettled: () => {
-        queryClient.invalidateQueries(queryKey);
-      },
-    }
-  );
+      return { previousData };
+    },
+    onError: (err, data, context) => {
+      // reset the server state to the last known state
+      queryClient.setQueryData(queryKey, (context as any).previousData);
+      // reset the draft to the last known draft unless the user made more changes
+      if (draft !== undefined) {
+        setDraft(data);
+      }
+    },
+    // Always refetch after error or success:
+    onSettled: () => {
+      queryClient.invalidateQueries(queryKey);
+    },
+  });
 
   // create a wrapper function which saves the draft value to the server
   const { mutate } = mutation; // extracted for use in the dependency array
@@ -100,7 +109,6 @@ export const useAutoLoadQuery = <D>(options: useAutoQueryOptions<D>) => {
     // while also making the save callback stable across renders
     const draft = getDraft();
     if (draft !== undefined) {
-      console.log("saving draft", draft);
       mutate(draft);
     }
   }, [getDraft, mutate]);

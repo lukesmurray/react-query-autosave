@@ -2,10 +2,10 @@ import React, { useCallback } from "react";
 import { QueryClientProvider } from "react-query";
 import { ReactQueryDevtools } from "react-query/devtools";
 import { queryClient } from "./queries/queryClient";
-import { useAutoQueryGetUserData } from "./queries/useAutoQueryGetUserData";
+import { useAutoSyncQueryUserData } from "./queries/useAutoQueryGetUserData";
 
 const UserDataEditor = () => {
-  const { value, setValue, save } = useAutoQueryGetUserData();
+  const { value, setValue, save } = useAutoSyncQueryUserData();
 
   const handleNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

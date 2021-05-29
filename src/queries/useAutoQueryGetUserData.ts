@@ -1,8 +1,9 @@
 import { useCallback, useMemo } from "react";
+import { getUserData, saveUserData, UserData } from "../api/api";
+import { useAutoSyncQuery } from "./helpers/useAutoSyncQuery";
 import { useQueryStore } from "./queryStore/queryStore";
-import { useAutoLoadQuery } from "./useAutoloadQuery";
 
-export const useAutoQueryGetUserData = () => {
+export const useAutoSyncQueryUserData = () => {
   const queryKey = useMemo(() => ["user", "data"], []);
 
   // getter and setter for local draft
@@ -14,7 +15,7 @@ export const useAutoQueryGetUserData = () => {
     () => () => useQueryStore.getState().userData.draft,
     []
   );
-  return useAutoLoadQuery({
+  return useAutoSyncQuery({
     getDraft,
     queryKey,
     setDraft,
@@ -22,5 +23,7 @@ export const useAutoQueryGetUserData = () => {
     auto_load_interval: 1 * 1000,
     debounce_save_delay: 3 * 1000,
     max_save_delay: 10 * 1000,
+    mutateFn: useCallback((data: UserData) => saveUserData(data), []),
+    queryFn: useCallback(() => getUserData(), []),
   });
 };

@@ -1,21 +1,24 @@
 import { UserData } from "../../api/api";
-import { createStoreWithImmerMiddleware } from "./createStoreWithImmerMiddleware";
+import { createStoreWithImmerMiddleware } from "./helpers/createStoreWithImmerMiddleware";
 
-// get data from server
-// make changes (now we're modifying the draft)
-// save
-// now we're displaying the server value
-// user keeps editing, now we're displaying/modifying the draft
-// server errors
-// notify the user
-
-interface QueryStoreState {
-  userData: {
-    draft?: UserData;
-    setDraft: (data?: UserData) => void;
-  };
+/**
+ * Interface for data which supports useAutoLoadQuery
+ */
+interface AutoLoadQueryDraft<D> {
+  draft?: D;
+  setDraft: (data?: D) => void;
 }
 
+/**
+ * The query store state
+ */
+interface QueryStoreState {
+  userData: AutoLoadQueryDraft<UserData>;
+}
+
+/**
+ * create the query store for the application
+ */
 export const useQueryStore = createStoreWithImmerMiddleware<QueryStoreState>(
   (set) => ({
     userData: {
